@@ -2,41 +2,37 @@ package com.gpogulsky.common.toolbox.meters;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Simple non-locking rate meter.
+ * The size should be picked according to the expected number of threads.
+ * Too small buffer can wrap to fast and collide on stor updates.
+ * 
+ * @author gpogulsky
+ *
+ */
 public class CircularRateMeter {
 
-    private final static int smask = 0b11111;
-    private final static int[] smap = new int[32];
-    static {
-        smap[0] = 1;
-        for (int i = 1; i < 32; i++) {
-            smap[i] = smap[i-1] << 1;
-        }
-    }
-
     private final int size;
-    private final int depth;
     private final double depthDiv;
-    private final int[] stor;
+    private final boolean[] stor;
 
     private final AtomicInteger nextAvailable = new AtomicInteger(0);
     private final AtomicInteger numSuccess = new AtomicInteger(0);
 
 
-    public CircularRateMeter(int depth) {
-        this.size = depth / 32 + (depth % 32 > 0 ? 1 : 0); // round up to the nearest int
-        this.depth = this.size * 32;
-        this.depthDiv = (double)this.depth;
-        this.stor = new int[this.size];
+    public CircularRateMeter(int size) {
+        this.size = size;
+        this.depthDiv = (double)this.size;
+        this.stor = new boolean[this.size];
     }
 
     public double record(boolean flag) {
 
         int pos = this.nextAvailable.getAndIncrement();
-        //System.out.println(Thread.currentThread().getName() + " pos: " + pos);
-
-        if (pos >= this.depth) {
+        
+        if (pos >= this.size) {
             int expect = pos + 1;
-            while (pos >= this.depth) {
+            while (pos >= this.size) {
                 if (this.nextAvailable.compareAndSet(expect, 0)) {
                     System.out.println("Swap success " + Thread.currentThread().getName() + " pos: " + pos + " expect: " + expect + " next: " + nextAvailable.get());
                 }
@@ -52,6 +48,7 @@ public class CircularRateMeter {
         }
 
         this.setStor(pos, flag);
+        
         return this.numSuccess.get() / this.depthDiv;
     }
 
@@ -64,46 +61,27 @@ public class CircularRateMeter {
     }
 
     private void setStor(int pos, boolean flag) {
-        int slot = pos / 32;
-        int shift = pos & smask;
-        if ((stor[slot] & smap[shift]) == 0 == flag) {
+    	
+        if (stor[pos] != flag) {
             if (flag) {
                 this.numSuccess.incrementAndGet();
-                this.stor[slot] |= smap[shift];
             }
             else {
                 this.numSuccess.decrementAndGet();
-                this.stor[slot] ^= smap[shift];
             }
-        }
-    }
 
-    private boolean getStor(int pos) {
-        int slot = pos / 32;
-        int shift = pos & smask;
-        return (this.stor[slot] & smap[shift]) > 0;
+            this.stor[pos] = flag;
+        }        
     }
 
     public int getCount() {
         int sum = 0;
         for(int i = 0; i< this.size; i++) {
-            sum += this.countBits(this.stor[i]);
+        	if (stor[i]) sum++;
         }
 
         return sum;
     }
-
-    private int countBits(int a) {
-        int count = 0;
-        while (a != 0)
-        {
-            count++;
-            a = a & (a - 1);    // clear the least significant bit set
-        }
-
-        return count;
-    }
-
 
     @Override
     public String toString() {

@@ -1,8 +1,10 @@
 package com.gpogulsky.common.toolbox.meters;
 
+import java.util.concurrent.atomic.LongAdder;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 
+import org.junit.Assert;
 import org.junit.Test;
 
 public class TestRateMeterMulti {
@@ -10,12 +12,13 @@ public class TestRateMeterMulti {
 	@Test
     public void test() {
 
-        final int nt = 4;
+        final int nt = 8;
         final int limit = 4000;
 
         final CountDownLatch latch = new CountDownLatch(nt);
+        final LongAdder adder = new LongAdder();
 
-        final CircularRateMeter crm = new CircularRateMeter(1000);
+        final CircularRateMeter crm = new CircularRateMeter(4000);
         final Random random = new Random();
 
         System.out.println("Start");
@@ -26,10 +29,12 @@ public class TestRateMeterMulti {
                 public void run() {
                     int i = 0;
                     while (i++ < limit) {
-                        crm.record(random.nextBoolean());
+                    	boolean b = random.nextBoolean();
+                    	if (b) adder.increment();
+                        crm.record(b);
                     }
 
-                    System.out.println("done");
+                    System.out.println(Thread.currentThread().getName() + " done");
                     latch.countDown();
                 }
             });
@@ -47,7 +52,10 @@ public class TestRateMeterMulti {
         
         checkMeter(crm);
 
+        System.out.println("Added: " + adder.longValue());
 //        System.out.println("Generated: " + success + " reported: " + srm.getSuccess());
+        
+        Assert.assertEquals(crm.getCount(), crm.getSuccess());
     }
 
     private static boolean checkMeter(CircularRateMeter crm) {
