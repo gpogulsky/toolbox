@@ -33,17 +33,9 @@ public class CircularRateMeter {
         if (pos >= this.size) {
             int expect = pos + 1;
             while (pos >= this.size) {
-                if (this.nextAvailable.compareAndSet(expect, 0)) {
-                    System.out.println("Swap success " + Thread.currentThread().getName() + " pos: " + pos + " expect: " + expect + " next: " + nextAvailable.get());
-                }
-                else {
-                    System.out.println("Swap fail " + Thread.currentThread().getName() + " pos: " + pos + " expect: " + expect + " next: " + nextAvailable.get());
-                }
-
+                this.nextAvailable.compareAndSet(expect, 0);
                 pos = this.nextAvailable.getAndIncrement();
                 expect = pos + 1;
-
-                System.out.println(Thread.currentThread().getName() + " pos: " + pos + " expect: " + expect + " next: " + nextAvailable.get());
             }
         }
 
